@@ -1,49 +1,77 @@
-# Solana 自动转账脚本使用说明
+# Solana 自动化交互脚本
 
-本项目包含 Python 和 JavaScript 两个版本的自动转账脚本。任选其一运行即可。
+本项目包含两个主要的自动化脚本，用于在 Solana 链上进行交互操作。
 
-## 1. 核心配置 (必须步骤)
+## 1. 环境准备
 
-在运行任何脚本之前，必须先配置钱包私钥。
-
-1. 打开项目根目录下的 `.env` 文件。
-2. 将占位符替换为您真实的 Solana 钱包私钥 (**Base58 格式字符串**)。
-   > **注意**：请务必删除等号后面的中文字符 (如 "这里填钱包A...")，直接粘贴私钥字符串。
-
-   ```ini
-   # 正确示例
-   SOL_WALLET_A_PRIVATE_KEY=5M... (你的私钥字符串)
-   SOL_WALLET_B_PRIVATE_KEY=2p... (你的私钥字符串)
-   
-   # RPC 节点 (可选，默认主网)
-   SOL_RPC_URL=https://api.mainnet-beta.solana.com
-   ```
-3. 保存文件。
-
----
-
-## 2. 运行 JavaScript 版本 (推荐)
-
-该版本无需激活虚拟环境，依赖已安装在 `node_modules` 中。
-
-**命令：**
+### 安装依赖
+确保已安装 Node.js，然后运行：
 ```bash
-node sol_auto_transfer_env.js
+npm install
+```
+
+### 配置文件 `.env`
+复制 `.env.example` 或新建 `.env` 文件，填入以下配置：
+
+```ini
+# (必填) 钱包私钥，多个私钥用逗号分隔
+SOL_PRIVATE_KEYS=YourPrivateKey1,YourPrivateKey2...
+
+# (必填) Jupiter Ultra API Key (可在 https://portal.jup.ag 免费获取)
+JUP_API_KEY=YourJupiterApiKey
+
+# (可选) SOCKS5 代理，格式 IP:PORT:USER:PASS，多个用逗号分隔
+# 脚本会自动将代理按顺序分配给钱包
+SOL_PROXIES=127.0.0.1:1080:user:pass,127.0.0.1:1081:user:pass
+
+# (可选) RPC 节点，默认使用公共主网节点
+SOL_RPC_URL=https://api.mainnet-beta.solana.com
+
+# (可选) USDC 代币地址
+USDC_MINT=EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v
 ```
 
 ---
 
-## 3. 运行 Python 版本
+## 2. 脚本功能说明
 
-该版本依赖 `solders` 和 `solana` 库，建议使用虚拟环境运行。
+### A. Jupiter Swap 自动交易 (`jup_swap.js`)
 
-**命令：**
-```powershell
-.\venv\Scripts\python.exe sol_auto_transfer_env.py
+**功能：**
+- 自动执行 **SOL -> USDC -> SOL** 的循环交易。
+- **防止磨损**：每次先将 SOL 换成 USDC，等待 10 秒确认后，再将全部 USDC 换回 SOL。
+- **随机金额**：每次随机交换 `0.01` - `0.03` SOL。
+- **随机间隔**：
+  - 白天 (8:00-23:00): 2 - 5 分钟/次
+  - 夜间 (23:00-8:00): 15 - 30 分钟/次
+- **API 支持**：使用 Jupiter Ultra API (`v1/ultra`)，无需 RPC 即可提交交易。
+- **代理支持**：支持 SOCKS5 代理，每个钱包绑定独立代理 IP，隔离 API 请求和链上交互。
+
+**运行命令：**
+```bash
+node jup_swap.js
 ```
 
-## 功能说明
+### B. 钱包自转账 (`soltransfer.js`)
 
-- **互转逻辑**：脚本启动后立即执行一次转账，随后每 **10分钟** 循环执行一次。
-- **方向切换**：A -> B，下次 B -> A，交替进行。
-- **金额随机**：每次转账金额在 `0.005` 到 `0.01` SOL 之间随机。
+**功能：**
+- 执行钱包内的 **自转账 (Self-Transfer)** 操作，即自己给自己转账。
+- 活跃账户：用于维持链上活跃度。
+- **随机金额**：转账金额为当前余额的 `1%` - `30%`。
+- **Gas 预留**：自动预留 `0.005` SOL 作为 Gas 费，防止余额耗尽。
+- **随机间隔**：
+  - 白天: 30秒 - 3分钟/次 (4% 概率跳过)
+  - 夜间: 8 - 20 分钟/次 (35% 概率跳过)
+- **代理支持**：同样支持 SOCKS5 代理，RPC 连接走代理。
+
+**运行命令：**
+```bash
+node soltransfer.js
+```
+
+---
+
+## 3. 注意事项
+1. **私钥安全**：`.env` 文件包含私钥，请勿上传到 GitHub 或公开分享。
+2. **代理配置**：如果配置了代理，脚本会优先使用代理连接 RPC 和 Jupiter API。
+3. **资金预留**：请确保钱包中有少量 SOL (建议 > 0.01 SOL) 以支付 Gas 费。
